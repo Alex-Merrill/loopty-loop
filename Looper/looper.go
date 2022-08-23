@@ -64,7 +64,7 @@ func (l *Looper) getAllFrameDiffs() [][]float64 {
 		startTime := time.Now()
 		frameDiffs[i] = l.getFrameDiffs(i)
 		duration := time.Since(startTime)
-		fmt.Printf("Frame %d done! Took %v seconds.\n", i, duration)
+		fmt.Printf("Frame %d done! Took %v\n", i, duration)
 	}
 
 	return frameDiffs
@@ -79,11 +79,15 @@ func (l *Looper) getFrameDiffs(idx int) []float64 {
 	lenToUse := int(math.Min(float64(len(l.vid.frames)), float64(lastFrameEligible)))
 
 	var wg sync.WaitGroup
-	wg.Add(lenToUse)
+	wg.Add(lenToUse - idx - 1)
 	fmt.Printf("Starting frame diff for frame %d\n", idx)
 	for i := idx + 1; i < lenToUse; i++ {
-		diffs[i] = getFrameDiff(l.vid.frames[idx], l.vid.frames[i])
+		go func(i int, idx int) {
+			defer wg.Done()
+			diffs[i] = getFrameDiff(l.vid.frames[idx], l.vid.frames[i])
+		}(i, idx)
 	}
+	wg.Wait()
 	fmt.Printf("Ending frame diff for frame %d\n", idx)
 
 	return diffs
