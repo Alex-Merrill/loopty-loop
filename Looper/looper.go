@@ -27,9 +27,10 @@ type Looper struct {
 func NewLoop(path string, minDuration, maxDuration int) Looper {
 	// TODO: Probably wanna resize the video to smaller size so its faster to process? or give an option to do so.
 	// maybe use grayscale?
+	fmt.Println("Reading video...")
 	startTime := time.Now()
 	video := readVideo(path)
-	fmt.Printf("time to read video: %v\n", time.Since(startTime))
+	fmt.Printf("Done! Time to read video: %v\n", time.Since(startTime))
 
 	return Looper{
 		vid:         video,
@@ -41,15 +42,63 @@ func NewLoop(path string, minDuration, maxDuration int) Looper {
 }
 
 func (l *Looper) Start() (bool, error) {
+	fmt.Println("Reading frames...")
 	startTime := time.Now()
 	diffs := l.getAllFrameDiffs()
 	fmt.Printf("Time to calc diffs of all eligible frames: %v\n", time.Since(startTime))
-	fmt.Println(diffs)
+	fmt.Printf("diffs: %v\n", diffs[:1])
+
+	startTime = time.Now()
+	start, end := l.getBestLoop(diffs)
+	fmt.Printf("Time to calc best start/end frames: %v\n", time.Since(startTime))
+	fmt.Printf("Found best start/end at frames: %d, %d\n", start, end)
 
 	var err error
 	err = nil
 
 	return true, err
+}
+
+func (l *Looper) getBestLoop(diffs [][]float64) (int, int) {
+    // convert diffs slice to be slice of slices of structs
+    // this will allow us to sort the array by difference value
+    // to find the best loop from a given frame in O(f) where f is 
+    // number of frames, for total runtime of O(f^2), instead of having to
+    // brute force find best loop from a given frame in O(f^2) for total O(f^3)
+    // TODO: Convert to tuple array way earlier when initially process data to avoid
+    // doing this work again. Then we can just sort it here.
+    type frames struct {
+        frame int
+        difference float64
+    }
+    var tupleDiffs [][]frames
+    for row := 0; row < len(diffs); row++ {
+        currFrames := make([]frames, len(diffs[row]))
+		for col := 0; col < len(diffs[0]); col++ {
+            frameToAdd := frames{
+                frame: col,
+                difference: diffs[row][col],
+            } 
+            currFrames[col] = frameToAdd
+		}
+        sort.Slice(currFrames, func(i,j int) bool {
+            return currFrames[i].difference < currFrames[j].difference
+        })
+        tupleDiffs = append(tupleDiffs, currFrames)
+    }
+
+
+	var currStart int
+	var currEnd int
+    var currDifference float64
+	var currDuration float64
+	for row := 0; row < len(diffs); row++ {
+		for col := 0; col < len(diffs[0]); col++ {
+            if diffs[currStart]
+		}
+	}
+
+	return start, end
 }
 
 func (l *Looper) getAllFrameDiffs() [][]float64 {
@@ -81,18 +130,18 @@ func (l *Looper) getFrameDiffs(idx int) []float64 {
 	var wg sync.WaitGroup
 	wg.Add(lenToUse - idx - 1)
 	for i := idx + 1; i < lenToUse; i++ {
-		go func(i int, idx int) {
+		go func(i int) {
 			defer wg.Done()
-			diffs[i] = getFrameDiff(l.vid.frames[idx], l.vid.frames[i])
-		}(i, idx)
+			diffs[i] = getFramePixelDiff(l.vid.frames[idx], l.vid.frames[i])
+		}(i)
 	}
 	wg.Wait()
 
 	return diffs
 }
 
-// returns average pixel difference
-func getFrameDiff(f1, f2 []float64) float64 {
+// returns average pixel difference between frames f1 and f2
+func getFramePixelDiff(f1, f2 []float64) float64 {
 	totalDiff := 0.0
 	for i := 0; i < len(f1); i += 3 {
 		r1 := f1[i]
